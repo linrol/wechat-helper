@@ -2,7 +2,6 @@ package com.example.julive.wechathelper;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
-import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -43,13 +42,13 @@ public class WechatServiceImpl extends AccessibilityService {
         if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             switch (config) {
                 case "1":
-                    System.out.println("add");
+                    autoAddFriend(className);
                     break;
                 case "2":
-                    System.out.println("autoSendImage");
+                    autoSendImage(className);
                     break;
                 case "3":
-                    System.out.println("autoShareMiniPrograms");
+                    autoShareMiniPrograms(className);
                     break;
                 default:
                     System.out.println("default");
