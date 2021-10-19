@@ -204,7 +204,7 @@ class WechatService : AccessibilityService() {
     }
 
     private fun log(config: String?) {
-        Log.d("AccessibilityNodeInfo", config)
+        Log.d("AccessibilityNodeInfo", config!!)
     }
 
     /**

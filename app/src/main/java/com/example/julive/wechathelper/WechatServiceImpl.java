@@ -18,10 +18,13 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.Toast;
 
 import java.util.List;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
+@RequiresApi(api = Build.VERSION_CODES.N)
 public class WechatServiceImpl extends AccessibilityService {
 
-    private Handler handler = new Handler();
+    private final Handler handler = new Handler();
 
     /**
      * 控制该动作只操作一次
@@ -33,7 +36,6 @@ public class WechatServiceImpl extends AccessibilityService {
     }
 
     @Override
-    @RequiresApi(Build.VERSION_CODES.N)
     public void onAccessibilityEvent(AccessibilityEvent event) {
         String pkgName = event.getPackageName().toString();
         int eventType = event.getEventType();
@@ -56,7 +58,6 @@ public class WechatServiceImpl extends AccessibilityService {
         }
     }
 
-
     private void autoShareMiniPrograms(String className) {
         if (className.equals("com.tencent.mm.ui.LauncherUI")) {
             click("发现");
@@ -72,7 +73,6 @@ public class WechatServiceImpl extends AccessibilityService {
         }
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
     private void autoSendImage(String className) {
         if (className.equals("com.tencent.mm.ui.LauncherUI")) {
             click("发现");
@@ -98,24 +98,23 @@ public class WechatServiceImpl extends AccessibilityService {
 
     private void autoAddFriend(String className) {
         if (className.equals("com.tencent.mm.ui.LauncherUI")) {
-            click("微信");
-            click("更多");
-            click("添加朋友");
+            click("搜索");
         }
-        if (className.equals("com.tencent.mm.plugin.subapp.ui.pluginapp.AddMoreFriendsUI")) {
-            click("手机号");
-        }
-        if (className.equals("com.tencent.mm.plugin.fts.ui.FTSAddWw")) {
-            handler.postDelayed(() -> {
-                input("13261103711");
-                handler.postDelayed(() -> clickById("com.tencent.mm:id/px"), 1000L);
-            }, 1000L);
+        if (className.equals("com.tencent.mm.plugin.fts.ui.FTSMainUI")) {
+            input("1779561752", () -> click("查找手机/QQ号"));
         }
         if (className.equals("com.tencent.mm.plugin.profile.ui.ContactInfoUI")) {
             click("添加到通讯录");
         }
         if (className.equals("com.tencent.mm.plugin.profile.ui.SayHiWithSnsPermissionUI")) {
-            Toast.makeText(this, "请手动编辑，十五秒后自动点击发送", Toast.LENGTH_SHORT).show();
+            input((rootNode -> {
+                // 寻找设置备注输入框的node
+                AccessibilityNodeInfo remarkNode = rootNode.findAccessibilityNodeInfosByText("设置备注").stream().findFirst().get();
+                return remarkNode.getParent().getChild(4);
+            }),"1779561752", () -> click("发送", () ->{
+                // 成功后返回微信主页
+                performBackClick(2);
+            }, AccessibilityNodeInfo::isClickable));
             resetConfig();
         }
     }
@@ -134,69 +133,79 @@ public class WechatServiceImpl extends AccessibilityService {
      * @param str text关键字
      */
     private void click(String str) {
-        int clickAction = AccessibilityNodeInfo.ACTION_CLICK;
-        handler.postDelayed(() -> {
-            AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
-            if (nodeInfo == null) {
-                Toast.makeText(this, "rootWindow为空", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            List<AccessibilityNodeInfo> list = nodeInfo.findAccessibilityNodeInfosByText(str);
-            if (list == null || list.size() == 0) {
-                Toast.makeText(this, String.format("click 找不到有效的节点:%s", str), Toast.LENGTH_SHORT).show();
-                return;
-            }
-            log(list.toString());
-            list.get(list.size() - 1).performAction(clickAction);
-            list.get(list.size() - 1).getParent().performAction(clickAction);
-            nodeInfo.recycle();
-        }, 3000L);
+        click(str, null, null, false);
     }
-
-    /**
-     * 点击匹配的nodeInfo
-     *
-     * @param str text关键字
-     */
+    private void click(String str, Runnable runnable) {
+        click(str, runnable, null, false);
+    }
+    private void click(String str, Predicate<AccessibilityNodeInfo> onlyOneFilter) {
+        click(str, null, onlyOneFilter, false);
+    }
+    private void click(String str, Runnable runnable, Predicate<AccessibilityNodeInfo> onlyOneFilter) {
+        click(str, runnable, onlyOneFilter, false);
+    }
     private void clickById(String str) {
+        click(str, null, null, true);
+    }
+    private void click(String str, Runnable runnable, Predicate<AccessibilityNodeInfo> onlyOneFilter, boolean searchById) {
         int clickAction = AccessibilityNodeInfo.ACTION_CLICK;
         handler.postDelayed(() -> {
-            AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
-            if (nodeInfo == null) {
+            AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
                 Toast.makeText(this, "rootWindow为空", Toast.LENGTH_SHORT).show();
                 return;
             }
-            List<AccessibilityNodeInfo> list = nodeInfo.findAccessibilityNodeInfosByViewId(str);
-            if (list == null || list.isEmpty()) {
-                Toast.makeText(this, "clickById 找不到有效的节点", Toast.LENGTH_SHORT).show();
-            } else {
-                log(list.toString());
-                list.get(list.size() - 1).performAction(clickAction);
-                list.get(list.size() - 1).getParent().performAction(clickAction);
+            List<AccessibilityNodeInfo> list;
+            if (searchById) {
+                list = rootNode.findAccessibilityNodeInfosByViewId(str);
+            }else {
+                list = rootNode.findAccessibilityNodeInfosByText(str);
             }
-            nodeInfo.recycle();
-        }, 1000L);
+            if (list == null || list.isEmpty()) {
+                Toast.makeText(this, String.format("click 根据:[%s]未找到节点信息", str), Toast.LENGTH_SHORT).show();
+                rootNode.recycle();
+                return;
+            }
+            AccessibilityNodeInfo clickNode = list.get(0);
+            if(list.size() > 1 && onlyOneFilter != null){
+                clickNode = list.stream().filter(onlyOneFilter).findFirst().orElse(clickNode);
+            }
+            clickNode.performAction(clickAction);
+            clickNode.getParent().performAction(clickAction);
+            if(runnable != null) {
+                runnable.run();
+            }
+            rootNode.recycle();
+        }, 6000L);
     }
 
-    //自动输入打招呼内容
-    private void input(String hello) {
+    //找到当前焦点的view进行数输入
+    private void input(String str) {
+        input((rootNode) -> rootNode.findFocus(AccessibilityNodeInfo.FOCUS_INPUT), str,null);
+    }
+    private void input(String str, Runnable runnable) {
+        input((rootNode) -> rootNode.findFocus(AccessibilityNodeInfo.FOCUS_INPUT), str, runnable);
+    }
+    private void input(Function<AccessibilityNodeInfo, AccessibilityNodeInfo> targetNodeFunction, String str, Runnable runnable) {
         handler.postDelayed(() -> {
-            AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
-            if (nodeInfo == null) {
+            AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
                 Toast.makeText(this, "rootWindow为空", Toast.LENGTH_SHORT).show();
                 return;
             }
-            //找到当前获取焦点的view
-            AccessibilityNodeInfo target = nodeInfo.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+            AccessibilityNodeInfo target = targetNodeFunction.apply(rootNode);
             if (target == null) {
                 log("input: null");
                 return;
             }
             Bundle arguments = new Bundle();
-            arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, hello);
+            arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, str);
             target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments);
-            nodeInfo.recycle();
-        }, 1000L);
+            rootNode.recycle();
+            if(runnable != null) {
+                runnable.run();
+            }
+        }, 6000L);
     }
 
     private void log(String config) {
@@ -226,22 +235,28 @@ public class WechatServiceImpl extends AccessibilityService {
     /**
      * 点击回退按钮
      */
-    private void performBackClick() {
-        handler.postDelayed(() -> performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK), 1300L);
+    private void performBackClick(int number) {
+        if(number < 1) {
+            return;
+        }
+        handler.postDelayed(() -> {
+            performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK);
+            performBackClick(number -1);
+        }, 2000L);
     }
 
     /**
      * 回主页
      */
     private void performHomeClick() {
-        handler.postDelayed(() -> performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME), 1300L);
+        handler.postDelayed(() -> performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME), 2000L);
     }
 
     /**
      * 点击菜单按钮
      */
     private void performMenuClick() {
-        handler.postDelayed(() -> performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS), 1300L);
+        handler.postDelayed(() -> performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS), 2000L);
     }
 
 
@@ -261,7 +276,6 @@ public class WechatServiceImpl extends AccessibilityService {
     /**
      * 点击选项框
      */
-    @RequiresApi(api = Build.VERSION_CODES.N)
     private boolean performClickBtn(List<AccessibilityNodeInfo> accessibilityNodeInfoList) {
         if (accessibilityNodeInfoList == null || accessibilityNodeInfoList.isEmpty()) {
             return false;
@@ -281,7 +295,6 @@ public class WechatServiceImpl extends AccessibilityService {
      * @param startPicIndex 从第startPicIndex张开始选
      * @param picCount      总共选picCount张
      */
-    @RequiresApi(api = Build.VERSION_CODES.N)
     private void choosePicture(int startPicIndex, int picCount) {
         handler.postDelayed(() -> {
             AccessibilityNodeInfo accessibilityNodeInfo = getRootInActiveWindow();
@@ -318,7 +331,6 @@ public class WechatServiceImpl extends AccessibilityService {
      * 垂直滑动
      * 滑动比例 0~20
      */
-    @RequiresApi(api = Build.VERSION_CODES.N)
     private void slideVertical(int startSlideRatio, int stopSlideRatio) {
         log("slideVertical");
         int screenHeight = getScreenHeight(this);
