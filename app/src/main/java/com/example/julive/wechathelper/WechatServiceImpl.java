@@ -138,16 +138,16 @@ public class WechatServiceImpl extends AccessibilityService {
     private void click(String str, Runnable runnable) {
         click(str, runnable, null, false);
     }
-    private void click(String str, Predicate<AccessibilityNodeInfo> onlyOneFilter) {
-        click(str, null, onlyOneFilter, false);
+    private void click(String str, Predicate<AccessibilityNodeInfo> uniquePredicate) {
+        click(str, null, uniquePredicate, false);
     }
-    private void click(String str, Runnable runnable, Predicate<AccessibilityNodeInfo> onlyOneFilter) {
-        click(str, runnable, onlyOneFilter, false);
+    private void click(String str, Runnable runnable, Predicate<AccessibilityNodeInfo> uniquePredicate) {
+        click(str, runnable, uniquePredicate, false);
     }
     private void clickById(String str) {
         click(str, null, null, true);
     }
-    private void click(String str, Runnable runnable, Predicate<AccessibilityNodeInfo> onlyOneFilter, boolean searchById) {
+    private void click(String str, Runnable runnable, Predicate<AccessibilityNodeInfo> uniquePredicate, boolean searchById) {
         int clickAction = AccessibilityNodeInfo.ACTION_CLICK;
         handler.postDelayed(() -> {
             AccessibilityNodeInfo rootNode = getRootInActiveWindow();
@@ -167,8 +167,8 @@ public class WechatServiceImpl extends AccessibilityService {
                 return;
             }
             AccessibilityNodeInfo clickNode = list.get(0);
-            if(list.size() > 1 && onlyOneFilter != null){
-                clickNode = list.stream().filter(onlyOneFilter).findFirst().orElse(clickNode);
+            if(list.size() > 1 && uniquePredicate != null){
+                clickNode = list.stream().filter(uniquePredicate).findFirst().orElse(clickNode);
             }
             clickNode.performAction(clickAction);
             clickNode.getParent().performAction(clickAction);
